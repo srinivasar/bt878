@@ -1,0 +1,35 @@
+********************************************
+Linux Source Configuration and Installation 
+********************************************
+
+Download linux source:
+======================
+sudo aptitude install linux-source
+
+Extracting linux source under /usr/src
+======================================
+sudo bunzip2 linux-source-3.2.0.tar.bz2
+sudo tar xvf linux-source-3.2.0.tar 
+
+Linux Source file modfied for HISCO Board
+==========================================
+File Modified: linux-source-3.2.0/drivers/media/video/bt8xx/bttv-cards.c
+
+Added the below 3 lines to support HISCO BOARD inside __devinitdata structure 
+   /* Added SubSystem ID's to support HISCO Board */
+   { 0x7121216a, BTTV_BOARD_GEOVISION_GV800S, "Hisco (master)" },
+   { 0x7121216b, BTTV_BOARD_GEOVISION_GV800S, "Hisco (slave) - 1" },
+
+Line Number (roughly): 337 (Line number may differ based on different Linux source version)
+
+Configuring Linux kernel:
+=========================
+step-1: sudo vi .config 
+step-2: sudo make oldconfig
+step-3: sudo make
+step-4: sudo make modules_install
+step-5: sudo make install
+step-6: sudo reboot
+
+Note: The above steps are tested on linux-source-3.2.0. No need to specify "sudo" if logged in as root. 
+       
