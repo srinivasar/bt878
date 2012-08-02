@@ -13,23 +13,130 @@ sudo tar xvf linux-source-3.2.0.tar
 
 Linux Source file modfied for HISCO Board
 ==========================================
+
+Add the below two lines in bttv.h
+#define BTTV_BOARD_HISCO_16                0xa0
+#define BTTV_BOARD_HISCO_16_SL             0xa1
+
 File Modified: linux-source-3.2.0/drivers/media/video/bt8xx/bttv-cards.c
 
 Added the below 3 lines to support HISCO BOARD inside __devinitdata structure 
-   /* Added SubSystem ID's to support HISCO Board */
-   { 0x7121216a, BTTV_BOARD_GEOVISION_GV800S, "Hisco (master)" },
-   { 0x7121216b, BTTV_BOARD_GEOVISION_GV800S, "Hisco (slave) - 1" },
+       /* Added SubSystem ID's to support HISCO Board */
+        { 0x7121216a, BTTV_BOARD_HISCO_16, "Hisco (master)" },
+        { 0x7121216b, BTTV_BOARD_HISCO_16_SL, "Hisco (slave)" },
 
 Line Number (roughly): 337 (Line number may differ based on different Linux source version)
 
+Added the below two lines for function prototype in the beginning of the file bttv-cards.c
+
+static void hisco_muxsel(struct bttv *btv, unsigned int input);
+static void hisco_init(struct bttv *btv);
+
+Added the following to bttv-cards-.cnn
+
+                [BTTV_BOARD_HISCO_16] = {
+                .name           = "HISCO-16 (master)",
+                .video_inputs   = 8,
+                //.audio_inputs= 1,
+                .tuner_type     = TUNER_ABSENT,
+                .tuner_addr     = ADDR_UNSET,
+                .svhs           = NO_SVHS,
+                .gpiomask       = 0xf107f,
+                .no_gpioirq     = 1,
+                .muxsel         = MUXSEL(2, 2, 2, 2, 2, 2, 2, 2),
+                .pll            = PLL_28,
+                .no_msp34xx     = 1,
+                .no_tda7432     = 1,
+                .muxsel_hook    = hisco_muxsel,
+        },
+
+                [BTTV_BOARD_HISCO_16_SL] = {
+                .name           = "HISCO-16 (slave)",
+                .video_inputs   = 8,
+                // .audio_inputs= 1,
+                .tuner_type     = TUNER_ABSENT,
+                .tuner_addr     = ADDR_UNSET,
+                .svhs           = NO_SVHS,
+                .gpiomask       = 0x00,
+                .no_gpioirq     = 1,
+                .muxsel         = MUXSEL(2, 2, 2, 2, 2, 2, 2, 2),
+                .pll            = PLL_28,
+                .no_msp34xx     = 1,
+                .no_tda7432     = 1,
+                .muxsel_hook    = hisco_muxsel,
+        },
+
+static void hisco_init(struct bttv *btv)
+{
+        char *sw_status = (char *)(&btv->mbox_we);
+        int ix;
+
+        gpio_inout(0xf107f, 0xf107f);
+        gpio_write(1<<19); /* reset the analog MUX */
+        gpio_write(0);
+
+        /* Preset camera 0 to the 4 controllers */
+        for (ix = 0; ix < 2; ix++) {
+                sw_status[ix] = ix;
+                gv800s_write(btv, ix, ix, 1);
+        }
+
+        /* Inputs on the "master" controller need this brightness fix */
+        bttv_I2CWrite(btv, 0x18, 0x5, 0x90, 1);
+
+        if (btv->c.nr > 2)
+                return;
+
+        /*
+         * Store the "master" controller pointer in the master
+         * array for later use in the muxsel function.
+         */
+        master[btv->c.nr]   = btv;
+        master[btv->c.nr+1] = btv;
+}
+
+static void hisco_muxsel(struct bttv *btv, unsigned int input)
+{
+        struct bttv *mctlr;
+        char *sw_status;
+        int xaddr, yaddr;
+        static unsigned int map[2][8] = { { 0x0, 0x2, 0x4, 0x6, 0x8, 0xa, 0xc, 0xe },
+                                          { 0x1, 0x3, 0x5, 0x7, 0x9, 0xb, 0xd, 0xf } };
+
+        input = input%8;
+
+        mctlr = master[btv->c.nr];
+        if (mctlr == NULL) {
+                /* do nothing until the "master" is detected */
+                return;
+        }
+        yaddr = (btv->c.nr - mctlr->c.nr) & 3;
+        sw_status = (char *)(&mctlr->mbox_we);
+        xaddr = map[yaddr][input] & 0xf;
+
+
+        /* Check if the controller/camera pair has changed, ignore otherwise */
+        if (sw_status[yaddr] != xaddr) {
+                /* disable the old switch, enable the new one and save status */
+                gv800s_write(mctlr, sw_status[yaddr], yaddr, 0);
+                sw_status[yaddr] = xaddr;
+                gv800s_write(mctlr, xaddr, yaddr, 1);
+        }
+}
+
+Add the following lines in bttv_init_card2() in bttv-cards.c
+        case BTTV_BOARD_HISCO_16:
+                hisco_init(btv);
+                break;
+
+
 Configuring Linux kernel:
 =========================
-step-1: sudo vi .config 
-step-2: sudo make oldconfig
-step-3: sudo make
-step-4: sudo make modules_install
-step-5: sudo make install
-step-6: sudo reboot
+step-1: sudo make oldconfig
+step-2: sudo make
+step-3: sudo make modules_install
+step-4: sudo make install
+step-5: sudo reboot
 
 Note: The above steps are tested on linux-source-3.2.0. No need to specify "sudo" if logged in as root. 
        
