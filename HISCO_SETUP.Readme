@@ -32,7 +32,7 @@ Added the below two lines for function prototype in the beginning of the file bt
 static void hisco_muxsel(struct bttv *btv, unsigned int input);
 static void hisco_init(struct bttv *btv);
 
-Added the following to bttv-cards-.cnn
+Added the following to bttv-cards.c
 
                 [BTTV_BOARD_HISCO_16] = {
                 .name           = "HISCO-16 (master)",
